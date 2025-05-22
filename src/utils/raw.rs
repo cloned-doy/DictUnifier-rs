@@ -20,6 +20,9 @@ fn path_buf_to_str(path_buf: &PathBuf) -> String {
 }
 
 pub fn from_ifo(ifo_path: &str, archive_path: &str, dest: &str) -> anyhow::Result<()> {
+    println!("from_ifo: ifo path {}", ifo_path);
+    println!("archpath {}", archive_path);
+    println!("dest{}", dest); //
     let file_id = Path::new(ifo_path).file_stem();
     if let Some(file_name) = file_id {
         let barename = Path::new(archive_path).join(file_name).to_owned();
@@ -133,16 +136,25 @@ pub fn from_ifo(ifo_path: &str, archive_path: &str, dest: &str) -> anyhow::Resul
 
 // Get files from .tar.bz2
 pub fn from_archive(file: &str, dest: &str) -> anyhow::Result<()> {
+    let output = Command::new("tar")
+        .args(["-tjf", file, "-C", dest])
+        .output()?;
     Command::new("tar")
         .args(["-xjf", file, "-C", dest])
         .output()?;
 
-    let entries = fs::read_dir(dest)?
-        .map(|res| res.map(|e| e.path()))
-        .collect::<Result<Vec<_>, io::Error>>()?;
-    let archive_dir = &entries[0];
+    let listing = String::from_utf8_lossy(&output.stdout);
+    let files: Vec<String> = listing.lines().map(|s| s.to_string()).collect();
+    let folder_name = &files[0].as_str();
 
-    let file_contents = fs::read_dir(archive_dir)?
+    // let parent = Path::new(&folder_name).parent().unwrap();
+    let folder = Path::new(&folder_name).strip_prefix(Path::new(&folder_name).parent().unwrap());
+
+    let archive_dir = Path::new(dest).join(folder.unwrap());
+
+    println!("file {}， extracted dest {}", file, &archive_dir.display());
+
+    let file_contents = fs::read_dir(&archive_dir)?
         .map(|res| res.map(|e| e.path()))
         .collect::<Result<Vec<_>, io::Error>>()?;
 
@@ -160,10 +172,9 @@ pub fn from_archive(file: &str, dest: &str) -> anyhow::Result<()> {
             has_ifo
         })
         .collect();
-
     from_ifo(
         path_buf_to_str(file_contents[0]).as_str(),
-        path_buf_to_str(archive_dir).as_str(),
+        path_buf_to_str(&archive_dir).as_str(),
         dest,
     )?;
 
