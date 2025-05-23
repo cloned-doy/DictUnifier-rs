@@ -3,7 +3,8 @@ use lazy_static::lazy_static;
 use std::env;
 
 mod utils;
-use utils::from_archive;
+#[allow(unused_imports)]
+use utils::{from_archive, from_folder};
 
 fn main() -> anyhow::Result<()> {
     lazy_static! {
@@ -14,6 +15,9 @@ fn main() -> anyhow::Result<()> {
     if let Some(file) = args.get(1) {
         // test file: "./__test__/stardict-oald-cn-2.4.2.tar.bz2"
         from_archive(file, &DEST)?;
+        // if the folder has multiple dics, set from folders: true
+        // let multi_dicts = true;
+        // from_folder(file, &DEST, multi_dicts)?;
     }
 
     Ok(())

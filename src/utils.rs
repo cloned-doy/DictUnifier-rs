@@ -1,3 +1,3 @@
 mod raw;
 
-pub use raw::{from_archive};
+pub use raw::{from_archive, from_folder};

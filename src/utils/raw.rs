@@ -1,10 +1,11 @@
 use anyhow::Ok;
 use fs_extra::file::{copy, CopyOptions};
 use std::collections::HashMap;
+
+use std::fs;
 use std::ops::Add;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::{fs, io};
 
 #[path = "./dict.rs"]
 mod dict;
@@ -20,9 +21,6 @@ fn path_buf_to_str(path_buf: &PathBuf) -> String {
 }
 
 pub fn from_ifo(ifo_path: &str, archive_path: &str, dest: &str) -> anyhow::Result<()> {
-    println!("from_ifo: ifo path {}", ifo_path);
-    println!("archpath {}", archive_path);
-    println!("dest{}", dest); //
     let file_id = Path::new(ifo_path).file_stem();
     if let Some(file_name) = file_id {
         let barename = Path::new(archive_path).join(file_name).to_owned();
@@ -135,6 +133,7 @@ pub fn from_ifo(ifo_path: &str, archive_path: &str, dest: &str) -> anyhow::Resul
 }
 
 // Get files from .tar.bz2
+#[allow(dead_code)]
 pub fn from_archive(file: &str, dest: &str) -> anyhow::Result<()> {
     let output = Command::new("tar")
         .args(["-tjf", file, "-C", dest])
@@ -147,36 +146,84 @@ pub fn from_archive(file: &str, dest: &str) -> anyhow::Result<()> {
     let files: Vec<String> = listing.lines().map(|s| s.to_string()).collect();
     let folder_name = &files[0].as_str();
 
-    // let parent = Path::new(&folder_name).parent().unwrap();
-    let folder = Path::new(&folder_name).strip_prefix(Path::new(&folder_name).parent().unwrap());
+    let parent = Path::new(&folder_name).parent().unwrap();
+    let folder = Path::new(&folder_name).strip_prefix(parent);
 
     let archive_dir = Path::new(dest).join(folder.unwrap());
 
     println!("file {}， extracted dest {}", file, &archive_dir.display());
 
-    let file_contents = fs::read_dir(&archive_dir)?
-        .map(|res| res.map(|e| e.path()))
-        .collect::<Result<Vec<_>, io::Error>>()?;
+    let mut pdf_files = Vec::new();
 
-    let file_contents: Vec<_> = file_contents
-        .iter()
-        .filter(|f| {
-            let filename = f.display().to_string();
-            let filename = Path::new(&filename);
-            let mut has_ifo = false;
-            if let Some(ext) = filename.extension() {
-                if ext.eq("ifo") {
-                    has_ifo = true
+    // assuming from one tar.bz2 file,
+    // so from_folders set to false
+    scan_paths(&archive_dir, &mut pdf_files, false)?;
+
+    for (dir, pdf_path) in pdf_files {
+        // for debug only
+        // println!(
+        //     "Found IFO: {} in directory: {}",
+        //     pdf_path.display(),
+        //     dir.display()
+        // );
+        from_ifo(
+            &pdf_path.display().to_string(),
+            &dir.display().to_string(),
+            &dir.display().to_string(),
+        )?;
+    }
+
+    Ok(())
+}
+
+// Get .ifo files from folders
+// if want to execute multi_dicts in a concentrated folder
+// set multi_dicts to true
+#[allow(dead_code)]
+pub fn from_folder(file: &str, dest: &str, multi_dicts: bool) -> Result<(), anyhow::Error> {
+    let mut pdf_files = Vec::new();
+    scan_paths(Path::new(file), &mut pdf_files, multi_dicts)?;
+
+    for (dir, pdf_path) in pdf_files {
+        // for debug only
+        // println!(
+        //     "Found IFO: {} in directory: {}",
+        //     pdf_path.display(),
+        //     dir.display()
+        // );
+        from_ifo(
+            &pdf_path.display().to_string(),
+            &dir.display().to_string(),
+            &dir.display().to_string(),
+        )?;
+    }
+
+    println!(
+        "Search completed in base directory: {}, output destination: {}",
+        file, dest
+    );
+    Ok(())
+}
+
+fn scan_paths(
+    current_dir: &Path,
+    ifo_paths: &mut Vec<(PathBuf, PathBuf)>,
+    recrusive: bool,
+) -> Result<(), anyhow::Error> {
+    for entry in fs::read_dir(current_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            if recrusive {
+                scan_paths(&path, ifo_paths, true)?;
+            }
+        } else if let Some(ext) = path.extension() {
+            if ext.eq_ignore_ascii_case("ifo") {
+                if let Some(parent) = path.parent() {
+                    ifo_paths.push((parent.to_path_buf(), path));
                 }
             }
-            has_ifo
-        })
-        .collect();
-    from_ifo(
-        path_buf_to_str(file_contents[0]).as_str(),
-        path_buf_to_str(&archive_dir).as_str(),
-        dest,
-    )?;
-
+        }
+    }
     Ok(())
 }
