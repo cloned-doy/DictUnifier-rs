@@ -133,7 +133,6 @@ pub fn from_ifo(ifo_path: &str, archive_path: &str, dest: &str) -> anyhow::Resul
 }
 
 // Get files from .tar.bz2
-#[allow(dead_code)]
 pub fn from_archive(file: &str, dest: &str) -> anyhow::Result<()> {
     let output = Command::new("tar")
         .args(["-tjf", file, "-C", dest])
@@ -160,12 +159,6 @@ pub fn from_archive(file: &str, dest: &str) -> anyhow::Result<()> {
     scan_paths(&archive_dir, &mut pdf_files, false)?;
 
     for (dir, pdf_path) in pdf_files {
-        // for debug only
-        // println!(
-        //     "Found IFO: {} in directory: {}",
-        //     pdf_path.display(),
-        //     dir.display()
-        // );
         from_ifo(
             &pdf_path.display().to_string(),
             &dir.display().to_string(),
@@ -176,21 +169,11 @@ pub fn from_archive(file: &str, dest: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-// Get .ifo files from folders
-// if want to execute multi_dicts in a concentrated folder
-// set multi_dicts to true
-#[allow(dead_code)]
 pub fn from_folder(file: &str, dest: &str, multi_dicts: bool) -> Result<(), anyhow::Error> {
     let mut pdf_files = Vec::new();
     scan_paths(Path::new(file), &mut pdf_files, multi_dicts)?;
 
     for (dir, pdf_path) in pdf_files {
-        // for debug only
-        // println!(
-        //     "Found IFO: {} in directory: {}",
-        //     pdf_path.display(),
-        //     dir.display()
-        // );
         from_ifo(
             &pdf_path.display().to_string(),
             &dir.display().to_string(),

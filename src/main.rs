@@ -1,23 +1,39 @@
+use anyhow::Result;
 use fs_extra::dir;
-use lazy_static::lazy_static;
 use std::env;
 
 mod utils;
-#[allow(unused_imports)]
+
 use utils::{from_archive, from_folder};
 
-fn main() -> anyhow::Result<()> {
-    lazy_static! {
-        static ref DEST: String = String::from("./dist");
-    }
-    dir::create_all("./dist/output", true)?;
+fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
-    if let Some(file) = args.get(1) {
-        // test file: "./__test__/stardict-oald-cn-2.4.2.tar.bz2"
-        from_archive(file, &DEST)?;
-        // if the folder has multiple dics, set from folders: true
-        // let multi_dicts = true;
-        // from_folder(file, &DEST, multi_dicts)?;
+
+    if args.len() < 3 {
+        eprintln!("Usage: {} [tar|folder|folders] <path> [dest]", args[0]);
+        std::process::exit(1);
+    }
+
+    let mode = &args[1];
+    let input_path = &args[2];
+    let dest = args.get(3).map_or("./dist".to_string(), |d| d.clone());
+
+    dir::create_all(format!("{}/output", dest), true)?;
+
+    match mode.as_str() {
+        "tar" => {
+            from_archive(input_path, &dest)?;
+        }
+        "folder" => {
+            from_folder(input_path, &dest, false)?;
+        }
+        "folders" => {
+            from_folder(input_path, &dest, true)?;
+        }
+        _ => {
+            eprintln!("Unknown mode: {}. Use 'tar', 'folder', or 'folders'.", mode);
+            std::process::exit(1);
+        }
     }
 
     Ok(())
