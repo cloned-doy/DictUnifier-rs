@@ -1,7 +1,6 @@
 use lazy_static::lazy_static;
 use regex::Regex;
 
-#[allow(dead_code)]
 pub fn html2text(html: &str) -> String {
     lazy_static! {
         static ref EMPTY_REGEX: Regex =

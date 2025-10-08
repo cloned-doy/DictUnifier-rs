@@ -19,8 +19,13 @@ use html::clean_xml;
 fn path_buf_to_str(path_buf: &PathBuf) -> String {
     path_buf.display().to_string()
 }
-
-pub fn from_ifo(ifo_path: &str, archive_path: &str, dest: &str) -> anyhow::Result<()> {
+// install arg false for debug. (file exist error issue)
+pub fn from_ifo(
+    ifo_path: &str,
+    archive_path: &str,
+    dest: &str,
+    install: bool,
+) -> anyhow::Result<()> {
     let file_id = Path::new(ifo_path).file_stem();
     if let Some(file_name) = file_id {
         let barename = Path::new(archive_path).join(file_name).to_owned();
@@ -97,7 +102,7 @@ pub fn from_ifo(ifo_path: &str, archive_path: &str, dest: &str) -> anyhow::Resul
         let xml = dictionary_xml_path.clone();
         let css = dictionary_css_path.clone();
         let plist = dictionary_plist_path.clone();
-        let output = Path::new(dest).join("output");
+        let output = Path::new(dest).join("golput");
         let output_str = path_buf_to_str(&output);
         let envs = HashMap::from([
             ("DICT_DEV_KIT_OBJ_DIR", output_str.as_str()),
@@ -115,17 +120,19 @@ pub fn from_ifo(ifo_path: &str, archive_path: &str, dest: &str) -> anyhow::Resul
             .expect("Fail to build dictionary");
         build_progress.wait()?;
 
-        let output_dictionary = output.join(String::from(dic_name) + ".dictionary");
+        if install {
+            let output_dictionary = output.join(String::from(dic_name) + ".dictionary");
 
-        match home::home_dir() {
-            Some(home_path) => {
-                let library_dictionaries = home_path.join("Library").join("Dictionaries");
-                let options = fs_extra::dir::CopyOptions::new();
-                fs_extra::dir::copy(output_dictionary, library_dictionaries, &options)?;
-                println!("Installed to ~/Library/Dictionaries/");
-                fs_extra::dir::remove(dest)?;
+            match home::home_dir() {
+                Some(home_path) => {
+                    let library_dictionaries = home_path.join("Library").join("Dictionaries");
+                    let options = fs_extra::dir::CopyOptions::new();
+                    fs_extra::dir::copy(output_dictionary, library_dictionaries, &options)?;
+                    println!("Installed to ~/Library/Dictionaries/");
+                    fs_extra::dir::remove(dest)?;
+                }
+                None => println!("Impossible to get your home dir!"),
             }
-            None => println!("Impossible to get your home dir!"),
         }
     }
 
@@ -155,15 +162,15 @@ pub fn from_archive(file: &str, dest: &str) -> anyhow::Result<()> {
     let mut pdf_files = Vec::new();
 
     // assuming from one tar.bz2 file,
-    // so from_folders set to false
+    // from_folders arg set to false
     scan_paths(&archive_dir, &mut pdf_files, false)?;
 
     for (dir, pdf_path) in pdf_files {
-        from_ifo(
-            &pdf_path.display().to_string(),
-            &dir.display().to_string(),
-            &dir.display().to_string(),
-        )?;
+        println!("dir before: {:?}", dir);
+        let dir = &dir.display().to_string();
+        println!("dir after add display: {}", dir);
+        from_ifo(&pdf_path.display().to_string(), dir, dir, false)?;
+        continue;
     }
 
     Ok(())
@@ -174,11 +181,11 @@ pub fn from_folder(file: &str, dest: &str, multi_dicts: bool) -> Result<(), anyh
     scan_paths(Path::new(file), &mut pdf_files, multi_dicts)?;
 
     for (dir, pdf_path) in pdf_files {
-        from_ifo(
-            &pdf_path.display().to_string(),
-            &dir.display().to_string(),
-            &dir.display().to_string(),
-        )?;
+        println!("dir before: {:?}", dir);
+        println!("destination: {}", dest);
+        let dir = &dir.display().to_string();
+        println!("dir after add display: {}", dir);
+        from_ifo(&pdf_path.display().to_string(), dir, dir, false)?;
     }
 
     println!(
@@ -198,13 +205,46 @@ fn scan_paths(
         let path = entry.path();
         if path.is_dir() {
             if recrusive {
-                scan_paths(&path, ifo_paths, true)?;
+
+                // scan_paths(&path, ifo_paths, false)?;
             }
         } else if let Some(ext) = path.extension() {
             if ext.eq_ignore_ascii_case("ifo") {
                 if let Some(parent) = path.parent() {
                     ifo_paths.push((parent.to_path_buf(), path));
                 }
+            } else if ext.eq_ignore_ascii_case("bz2") {
+                println!("ext {:?}", ext);
+                println!("path: {:?}", &path);
+                println!("current dir: {:?}", &current_dir);
+
+                Command::new("tar")
+                    .args([
+                        "-xjf",
+                        &path.to_str().unwrap(),
+                        "-C",
+                        &current_dir.to_str().unwrap(),
+                    ])
+                    .output()?;
+
+                let output = Command::new("tar")
+                    .args([
+                        "-tjf",
+                        &path.to_str().unwrap(),
+                        "-C",
+                        &current_dir.to_str().unwrap(),
+                    ])
+                    .output()?;
+
+                let listing = String::from_utf8_lossy(&output.stdout);
+                let files: Vec<String> = listing.lines().map(|s| s.to_string()).collect();
+                let folder_name = &files[0].as_str();
+
+                let parent = Path::new(&folder_name).parent().unwrap();
+                let folder = Path::new(&folder_name).strip_prefix(parent);
+
+                let archive_dir = Path::new(&current_dir).join(folder.unwrap());
+                scan_paths(&archive_dir, ifo_paths, false)?;
             }
         }
     }
