@@ -102,7 +102,7 @@ pub fn from_ifo(
         let xml = dictionary_xml_path.clone();
         let css = dictionary_css_path.clone();
         let plist = dictionary_plist_path.clone();
-        let output = Path::new(dest).join("golput");
+        let output = Path::new(dest).join("output");
         let output_str = path_buf_to_str(&output);
         let envs = HashMap::from([
             ("DICT_DEV_KIT_OBJ_DIR", output_str.as_str()),
